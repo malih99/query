@@ -1943,6 +1943,129 @@ describe('queryObserver', () => {
     expect(observer.getCurrentResult().data).toBe('updated')
   })
 
+  it('should recompute selected data when query data changes from -0 to 0', () => {
+    const key = createKey()
+    const select = (data: number) => data
+
+    queryClient.setQueryData(key, -0)
+
+    const options = queryClient.defaultQueryOptions({
+      queryKey: key,
+      queryFn: () => 0,
+      enabled: false,
+      structuralSharing: false,
+      select,
+    })
+
+    const observer = new QueryObserver(queryClient, options)
+
+    const initialResult = observer.getOptimisticResult(options)
+
+    expect(Object.is(initialResult.data, -0)).toBe(true)
+
+    queryClient.setQueryData(key, 0)
+
+    const updatedResult = observer.getOptimisticResult(options)
+
+    expect(Object.is(updatedResult.data, 0)).toBe(true)
+  })
+
+  it('should preserve signed zero when selected data changes with default structural sharing', () => {
+    const key = createKey()
+
+    const initialOptions = queryClient.defaultQueryOptions({
+      queryKey: key,
+      enabled: false,
+      placeholderData: 1,
+      select: () => -0,
+    })
+
+    const observer = new QueryObserver(queryClient, initialOptions)
+
+    const initialResult = observer.getOptimisticResult(initialOptions)
+
+    expect(Object.is(initialResult.data, -0)).toBe(true)
+
+    const updatedOptions = queryClient.defaultQueryOptions({
+      queryKey: key,
+      enabled: false,
+      placeholderData: 2,
+      select: () => 0,
+    })
+
+    const updatedResult = observer.getOptimisticResult(updatedOptions)
+
+    expect(Object.is(updatedResult.data, 0)).toBe(true)
+    expect(Object.is(observer.getCurrentResult().data, 0)).toBe(true)
+  })
+
+  it('should update currentResult when selected placeholder data changes from -0 to 0', () => {
+    const key = createKey()
+
+    const initialOptions = queryClient.defaultQueryOptions({
+      queryKey: key,
+      enabled: false,
+      placeholderData: 1,
+      structuralSharing: false,
+      select: () => -0,
+    })
+
+    const observer = new QueryObserver(queryClient, initialOptions)
+
+    const initialResult = observer.getOptimisticResult(initialOptions)
+
+    expect(Object.is(initialResult.data, -0)).toBe(true)
+    expect(Object.is(observer.getCurrentResult().data, -0)).toBe(true)
+
+    const updatedOptions = queryClient.defaultQueryOptions({
+      queryKey: key,
+      enabled: false,
+      placeholderData: 2,
+      structuralSharing: false,
+      select: () => 0,
+    })
+
+    const updatedResult = observer.getOptimisticResult(updatedOptions)
+
+    expect(Object.is(updatedResult.data, 0)).toBe(true)
+    expect(Object.is(observer.getCurrentResult().data, 0)).toBe(true)
+  })
+
+  it('should notify listeners when selected placeholder data changes from -0 to 0', () => {
+    const key = createKey()
+
+    const initialOptions = queryClient.defaultQueryOptions({
+      queryKey: key,
+      enabled: false,
+      placeholderData: 1,
+      structuralSharing: false,
+      notifyOnChangeProps: ['data'],
+      select: () => -0,
+    })
+
+    const observer = new QueryObserver(queryClient, initialOptions)
+    const listener = vi.fn<Parameters<typeof observer.subscribe>[0]>()
+
+    const unsubscribe = observer.subscribe(listener)
+    listener.mockClear()
+
+    const updatedOptions = queryClient.defaultQueryOptions({
+      ...initialOptions,
+      placeholderData: 2,
+      select: () => 0,
+    })
+
+    observer.setOptions(updatedOptions)
+
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ data: 0 }))
+
+    expect(
+      listener.mock.calls.some(([result]) => Object.is(result.data, 0)),
+    ).toBe(true)
+
+    unsubscribe()
+  })
+
   describe('StrictMode behavior', () => {
     it('should deduplicate calls to queryFn', async () => {
       const key = createKey()
